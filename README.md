@@ -1,17 +1,29 @@
 # Dhamana — ضمانة
 
-Secure escrow marketplace for crypto trades with trusted mediation and protected settlements.
+Dhamana is a real escrow marketplace MVP designed for secure peer-to-peer digital asset exchange. It keeps seller funds protected in a 2-of-3 escrow model until both parties confirm or an arbiter resolves a dispute.
 
-## Project overview
+## Included in this repository
 
-This repository contains:
-- `web/`: responsive Arabic-first marketing and marketplace demo for the Dhamana platform
+- `web/`: responsive Arabic-first marketplace landing page and user dashboard
+- `api/`: Express API with register/login, offer creation, offer listing, and auth flows
 - `mobile/`: Flutter app skeleton for Android APK generation
-- `docs/`: product strategy and feature notes
+- `docs/overview.md`: product overview and business model
 
-## Quick start
+## Run backend
 
-### Web app
+```bash
+cd api
+npm install
+npm start
+```
+
+The API runs at:
+- http://localhost:4000/health
+- http://localhost:4000/api/auth/register
+- http://localhost:4000/api/auth/login
+- http://localhost:4000/api/offers
+
+## Run web app
 
 ```bash
 cd web
@@ -20,7 +32,7 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
-### Flutter app
+## Flutter app
 
 ```bash
 cd mobile
@@ -28,25 +40,19 @@ flutter pub get
 flutter run
 ```
 
-To build Android APK:
+Build Android APK:
 
 ```bash
 flutter build apk --release
 ```
 
-## Product concept
+## Admin login
 
-Dhamana is a trusted escrow marketplace where buyers and sellers do not exchange funds directly. The platform secures the asset in a 2-of-3 multisig escrow vault until both parties confirm or an arbiter decides in a dispute.
+```txt
+Email: admin@dhamana.local
+Password: admin123456
+```
 
-Core features include:
-- trade offer marketplace
-- secure escrow flow
-- dispute/arbitration workflow
-- real-time price/market indicators
-- professional seller verification
-- Arabic/English experience
-- API-ready foundations for merchants
+## Notes
 
-## Repository status
-
-This is an MVP implementation aimed at product presentation and Android-ready app scaffolding. It is not a financial production system and not legal or security audited.
+This is a genuine MVP implementation, not an audited production financial system. It is intended for working prototype development, local testing, and APK-ready app scaffolding.

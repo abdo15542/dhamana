@@ -15,6 +15,7 @@ class DhamanaApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.amber),
+        scaffoldBackgroundColor: const Color(0xFF06111D),
         fontFamily: 'Cairo',
       ),
       home: const DhamanaHomePage(),
@@ -34,7 +35,6 @@ class DhamanaHomePage extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF06111D),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B1728),
         title: const Text('ضمانة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

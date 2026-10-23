@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ضمانة — منصة وساطة ضامنة لبيع وشراء العملات الرقمية بثقة." />
+    <meta name="description" content="ضمانة — منصة وسيط ضامن لبيع وشراء العملات الرقمية بثقة." />
     <title>ضمانة | Dhamana</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,7 +27,7 @@
           <a href="#pricing">الربح</a>
           <a href="#account">الحساب</a>
         </nav>
-        <button class="primary-btn" onclick="document.getElementById('account').scrollIntoView({behavior:'smooth'})">ابدأ الآن</button>
+        <button class="primary-btn" id="connect" type="button">ابدأ الآن</button>
       </div>
     </header>
 
@@ -195,7 +195,7 @@
             <aside class="filter-panel">
               <div class="panel-head">
                 <h3>تصفية العروض</h3>
-                <button class="ghost-btn small">تحديث</button>
+                <button class="ghost-btn small" type="button">تحديث</button>
               </div>
 
               <label>
@@ -235,6 +235,49 @@
         </div>
       </section>
 
+      <section id="account" class="section alt">
+        <div class="container">
+          <div class="section-heading">
+            <span class="pill">الحساب</span>
+            <h2>أنشئ حسابك وابدأ بالبيع أو الشراء بثقة</h2>
+          </div>
+
+          <form id="authForm" class="auth-form">
+            <select id="authMode" name="mode">
+              <option value="register">إنشاء حساب</option>
+              <option value="login">تسجيل الدخول</option>
+            </select>
+            <input id="displayName" name="displayName" type="text" placeholder="الاسم الظاهر" minlength="2" maxlength="80" />
+            <input name="email" type="email" placeholder="البريد الإلكتروني" required />
+            <input name="password" type="password" placeholder="كلمة المرور (10 أحرف على الأقل)" minlength="10" required />
+            <button type="submit" class="primary-btn">متابعة</button>
+          </form>
+
+          <form id="offerForm" class="offer-form">
+            <input name="title" type="text" placeholder="عنوان العرض" required />
+            <input name="asset" type="text" value="USDT" placeholder="العملة" required />
+            <input name="quantity" type="number" min="1" value="100" placeholder="الكمية" required />
+            <input name="price" type="number" min="0.01" step="0.01" placeholder="السعر" required />
+            <select name="paymentMethod" required>
+              <option value="bank_transfer">تحويل بنكي</option>
+              <option value="wallet">محفظة إلكترونية</option>
+              <option value="gift_card">بطاقة هدايا</option>
+              <option value="digital_service">خدمة رقمية</option>
+            </select>
+            <button type="submit" class="primary-btn">إضافة عرض للسوق</button>
+          </form>
+
+          <p id="accountStatus" class="account-status" role="status">لم تسجّل الدخول بعد.</p>
+
+          <div class="account-actions">
+            <button id="refreshMyOffers" class="ghost-btn" type="button">عرض عروضي</button>
+            <button id="logoutWeb" class="ghost-btn" type="button">تسجيل الخروج</button>
+          </div>
+
+          <div id="myOffers" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض عروضك.</div>
+        </div>
+      </section>
+
       <section id="pricing" class="section">
         <div class="container">
           <div class="section-heading">
@@ -260,35 +303,6 @@
           </div>
         </div>
       </section>
-
-      <section id="account" class="section alt">
-        <div class="container">
-          <div class="section-heading">
-            <span class="pill">الحساب</span>
-            <h2>أنشئ حسابك وابدأ بالبيع أو الشراء بثقة</h2>
-          </div>
-
-          <form id="authForm" class="auth-form">
-            <select id="authMode" name="mode">
-              <option value="register">إنشاء حساب</option>
-              <option value="login">تسجيل الدخول</option>
-            </select>
-            <input id="displayName" name="displayName" type="text" placeholder="الاسم الظاهر" minlength="2" maxlength="80" />
-            <input name="email" type="email" placeholder="البريد الإلكتروني" required />
-            <input name="password" type="password" placeholder="كلمة المرور (10 أحرف على الأقل)" minlength="10" required />
-            <button type="submit" class="primary-btn">متابعة</button>
-          </form>
-
-          <p id="accountStatus" class="account-status" role="status">لم تسجّل الدخول بعد.</p>
-
-          <div class="account-actions">
-            <button id="refreshMyOffers" class="ghost-btn" type="button">عرض عروضي</button>
-            <button id="logoutWeb" class="ghost-btn" type="button">تسجيل الخروج</button>
-          </div>
-
-          <div id="myOffers" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض عروضك.</div>
-        </div>
-      </section>
     </main>
 
     <footer class="footer">
@@ -306,6 +320,9 @@
       </div>
     </footer>
 
+    <script>
+      window.WATHIQ_API = 'http://localhost:4000';
+    </script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -313,7 +313,7 @@ nav a:hover { color: var(--text); }
 .cards-grid.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.info-card, .feature-card, .pricing-card, .filter-panel, .offers-panel, .auth-form {
+.info-card, .feature-card, .pricing-card, .filter-panel, .offers-panel, .auth-form, .offer-form {
   background: rgba(12, 22, 34, 0.78);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -438,12 +438,16 @@ nav a:hover { color: var(--text); }
   color: var(--gold);
 }
 
-.auth-form {
+.auth-form, .offer-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   max-width: 980px;
   margin: 0 auto 18px;
+}
+.offer-form {
+  grid-template-columns: 1.3fr 1fr 1fr 1.1fr 1.2fr 1.2fr;
+  max-width: 1200px;
 }
 .account-status {
   text-align: center;
@@ -456,6 +460,7 @@ nav a:hover { color: var(--text); }
   gap: 14px;
   margin-bottom: 18px;
 }
+.account-actions button { min-width: 180px; }
 
 .footer {
   padding: 24px 0 40px;
@@ -478,10 +483,11 @@ nav a:hover { color: var(--text); }
 }
 
 @media (max-width: 980px) {
-  .hero-grid, .market-grid, .cards-grid.three, .stats-grid, .auth-form {
+  .hero-grid, .market-grid, .cards-grid.three, .stats-grid, .auth-form, .offer-form {
     grid-template-columns: 1fr 1fr;
   }
   .hero-grid, .market-grid { grid-template-columns: 1fr; }
+  .offer-form { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -494,7 +500,7 @@ nav a:hover { color: var(--text); }
     width: 100%;
     justify-content: center;
   }
-  .cards-grid.three, .stats-grid, .auth-form {
+  .cards-grid.three, .stats-grid, .auth-form, .offer-form {
     grid-template-columns: 1fr;
   }
   .account-actions {

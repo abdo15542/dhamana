@@ -1,0 +1,14 @@
+{
+  "name": "dhamana",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "api"
+  ],
+  "scripts": {
+    "start:api": "npm --prefix api start",
+    "dev:api": "npm --prefix api run dev",
+    "test:api": "npm --prefix api test",
+    "build:web": "python3 -m http.server 8000 --directory web"
+  }
+}
