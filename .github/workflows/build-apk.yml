@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: "رابط الخادم HTTPS مثل https://dhamana.example.com"
-        required: true
+        description: "رابط الخادم HTTPS (اختياري: يمكن إدخاله داخل التطبيق)"
+        required: false
   push:
     tags: ["v*"]
 permissions:
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check API_URL
         run: |
-          case "$API_URL" in https://*) ;; *) echo "API_URL must start with https://"; exit 1;; esac
+          if [ -n "$API_URL" ]; then case "$API_URL" in https://*) ;; *) echo "API_URL must start with https://"; exit 1;; esac; fi
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - uses: actions/setup-java@v4
@@ -28,20 +28,56 @@ jobs:
         run: |
           mkdir www && cp -r ../web/* www/
           rm -f www/sw.js
-          echo "window.WATHIQ_API = '${API_URL%/}';" > www/config.js
+          if [ -n "$API_URL" ]; then sed -i "1i window.WATHIQ_DEFAULT_API='${API_URL%/}';" www/config.js; fi
       - name: Create Android project
         working-directory: android-app
         run: |
           npm install
           npx cap add android
           npx cap sync android
-      - name: Build debug APK
+      - name: App icon and version
+        working-directory: android-app/android/app/src/main
+        run: |
+          for d in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            IFS=: read n a f <<< "$d"
+            convert $GITHUB_WORKSPACE/web/icon-512.png -resize ${a}x${a} res/mipmap-$n/ic_launcher.png
+            convert $GITHUB_WORKSPACE/web/icon-512.png -resize ${a}x${a} res/mipmap-$n/ic_launcher_round.png
+            convert $GITHUB_WORKSPACE/web/icon-maskable-512.png -resize ${f}x${f} res/mipmap-$n/ic_launcher_foreground.png
+          done
+          sed -i "s/#[0-9A-Fa-f]\\{6\\}/#06111D/" res/values/ic_launcher_background.xml
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" ../../build.gradle
+      - name: Signing config
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          test -n "$KS_B64" || { echo "Missing ANDROID_KEYSTORE_B64 secret"; exit 1; }
+          echo "$KS_B64" | base64 -d > $GITHUB_WORKSPACE/release.jks
+          cat >> android-app/android/app/build.gradle << 'GRADLE'
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv('KS_FILE'))
+                      storePassword System.getenv('KS_PASS')
+                      keyAlias 'dhamana'
+                      keyPassword System.getenv('KS_PASS')
+                  }
+              }
+              buildTypes { release { signingConfig signingConfigs.release } }
+          }
+          GRADLE
+      - name: Build signed release APK
         working-directory: android-app/android
-        run: ./gradlew assembleDebug --no-daemon
+        env:
+          KS_FILE: ${{ github.workspace }}/release.jks
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Verify signature
+        run: |
+          APK=android-app/android/app/build/outputs/apk/release/app-release.apk
+          $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)/apksigner verify --print-certs $APK | head -5
+          cp $APK dhamana.apk
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android-app/android/app/build/outputs/apk/debug/app-debug.apk dhamana.apk
-          TAG="apk-${{ github.run_number }}"
-          gh release create "$TAG" dhamana.apk --title "APK $TAG" --notes "Server: $API_URL"
+          gh release create "apk-${{ github.run_number }}" dhamana.apk --title "APK ${{ github.run_number }}" --notes "Signed release build. Server: ${API_URL:-set inside the app}"
