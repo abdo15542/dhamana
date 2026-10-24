@@ -38,12 +38,19 @@ jobs:
       - name: App icon and version
         working-directory: android-app/android/app/src/main
         run: |
-          for d in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
-            IFS=: read n a f <<< "$d"
-            convert $GITHUB_WORKSPACE/web/icon-512.png -resize ${a}x${a} res/mipmap-$n/ic_launcher.png
-            convert $GITHUB_WORKSPACE/web/icon-512.png -resize ${a}x${a} res/mipmap-$n/ic_launcher_round.png
-            convert $GITHUB_WORKSPACE/web/icon-maskable-512.png -resize ${f}x${f} res/mipmap-$n/ic_launcher_foreground.png
-          done
+          pip install pillow
+          python3 - << 'PY'
+          import os
+          from PIL import Image
+          root = os.environ["GITHUB_WORKSPACE"] + "/web/"
+          icon = Image.open(root + "icon-512.png").convert("RGBA")
+          mask = Image.open(root + "icon-maskable-512.png").convert("RGBA")
+          for n, a, f in (("mdpi", 48, 108), ("hdpi", 72, 162), ("xhdpi", 96, 216), ("xxhdpi", 144, 324), ("xxxhdpi", 192, 432)):
+              d = "res/mipmap-" + n + "/"
+              icon.resize((a, a), Image.LANCZOS).save(d + "ic_launcher.png")
+              icon.resize((a, a), Image.LANCZOS).save(d + "ic_launcher_round.png")
+              mask.resize((f, f), Image.LANCZOS).save(d + "ic_launcher_foreground.png")
+          PY
           sed -i "s/#[0-9A-Fa-f]\\{6\\}/#06111D/" res/values/ic_launcher_background.xml
           sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" ../../build.gradle
       - name: Signing config
