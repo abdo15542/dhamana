@@ -1,0 +1,6 @@
+{
+  "appId": "com.dhamana.app",
+  "appName": "ضمانة",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}

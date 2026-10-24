@@ -1,0 +1,47 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "رابط الخادم HTTPS مثل https://dhamana.example.com"
+        required: true
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      API_URL: ${{ github.event.inputs.api_url || vars.API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check API_URL
+        run: |
+          case "$API_URL" in https://*) ;; *) echo "API_URL must start with https://"; exit 1;; esac
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Prepare web assets
+        working-directory: android-app
+        run: |
+          mkdir www && cp -r ../web/* www/
+          rm -f www/sw.js
+          echo "window.WATHIQ_API = '${API_URL%/}';" > www/config.js
+      - name: Create Android project
+        working-directory: android-app
+        run: |
+          npm install
+          npx cap add android
+          npx cap sync android
+      - name: Build debug APK
+        working-directory: android-app/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android-app/android/app/build/outputs/apk/debug/app-debug.apk dhamana.apk
+          TAG="apk-${{ github.run_number }}"
+          gh release create "$TAG" dhamana.apk --title "APK $TAG" --notes "Server: $API_URL"

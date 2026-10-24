@@ -359,6 +359,7 @@
       // same origin when served by the API; separate API port only for the python dev server on :8000
       window.WATHIQ_API = location.port === '8000' ? 'http://localhost:4000' : '';
     </script>
+    <script src="config.js"></script>
     <script src="app.js"></script>
     <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
   </body>
