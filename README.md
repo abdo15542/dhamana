@@ -9,7 +9,15 @@ Dhamana is a real escrow marketplace MVP designed for secure peer-to-peer digita
 - `mobile/`: Flutter app skeleton for Android APK generation
 - `docs/overview.md`: product overview and business model
 
-## Run backend
+## Deploy (one command)
+
+```bash
+cp .env.example .env   # set a strong ADMIN_PASSWORD
+docker compose up -d --build
+```
+App + API on http://localhost:4000 (data persists in the `dhamana-data` volume). Put it behind HTTPS (Caddy/Nginx/Cloudflare) before exposing it. In production the server refuses to start with a weak or default admin password.
+
+## Run backend (development)
 
 ```bash
 cd api

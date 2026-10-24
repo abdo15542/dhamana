@@ -1,4 +1,4 @@
-const API = window.WATHIQ_API || 'http://localhost:4000';
+const API = window.WATHIQ_API ?? '';
 const paymentLabels = {
   bank_transfer: 'تحويل بنكي',
   cash: 'نقدًا خارج المنصة',

@@ -67,3 +67,9 @@ test('non-admin blocked from admin route; malformed JSON gives JSON 400', async 
   const res = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{bad' });
   assert.equal(res.status, 400); assert.ok((await res.json()).error);
 });
+test('API serves the web app and security headers', async () => {
+  const res = await fetch(base + '/');
+  assert.equal(res.status, 200); assert.match(await res.text(), /ضمانة/);
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(res.headers.get('x-powered-by'), null);
+});
