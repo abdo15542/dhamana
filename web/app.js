@@ -123,6 +123,7 @@ async function loadAdmin(isAdmin) {
   el.hidden = !isAdmin; if (!isAdmin) return;
   const box = document.getElementById('adminDisputes'); box.replaceChildren();
   try {
+    await loadAdminRequests();
     const o = await request('/api/admin/overview');
     document.getElementById('adminStats').textContent = `المستخدمون: ${o.totalUsers} • العروض: ${o.totalOffers} (مفتوحة ${o.openOffers})`;
     const { items } = await request('/api/admin/trades?status=disputed');
@@ -148,6 +149,38 @@ document.getElementById('creditForm')?.addEventListener('submit', async (event) 
   try { await request('/api/admin/credit', { method: 'POST', body: JSON.stringify({ email: f.get('email'), asset: f.get('asset'), amount: Number(f.get('amount')) }) }); setAccountStatus('تم تعديل الرصيد.'); event.target.reset(); await loadWallet(); }
   catch (e) { setAccountStatus(e.message); }
 });
+
+const reqLabels = { pending: 'قيد المراجعة', approved: 'تمت الموافقة', rejected: 'مرفوض' };
+async function loadRequests() {
+  const el = document.getElementById('myRequests'); if (!el) return;
+  el.replaceChildren(); if (!authToken) return;
+  try {
+    const { items } = await request('/api/wallet/requests');
+    items.slice(0, 10).forEach((r) => { const p = document.createElement('p'); p.className = 'offer-meta'; p.textContent = `${r.type === 'deposit' ? 'إيداع' : 'سحب'} ${r.amount} ${r.asset} — ${reqLabels[r.status] || r.status}${r.note ? ' (' + r.note + ')' : ''}`; el.append(p); });
+  } catch (e) { /* ignore */ }
+}
+['depositForm', 'withdrawForm'].forEach((id) => document.getElementById(id)?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const f = new FormData(event.target); const dep = id === 'depositForm';
+  try {
+    await request(dep ? '/api/wallet/deposits' : '/api/wallet/withdrawals', { method: 'POST', body: JSON.stringify({ asset: f.get('asset'), amount: Number(f.get('amount')), [dep ? 'reference' : 'address']: f.get(dep ? 'reference' : 'address') }) });
+    setAccountStatus(dep ? 'تم إرسال طلب الإيداع للمراجعة.' : 'تم إرسال طلب السحب وقفل المبلغ.'); event.target.reset(); await loadWallet(); await loadRequests();
+  } catch (e) { setAccountStatus(e.message); }
+}));
+async function loadAdminRequests() {
+  const box = document.getElementById('adminRequests'); if (!box) return; box.replaceChildren();
+  const { items } = await request('/api/admin/requests?status=pending');
+  if (!items.length) box.textContent = 'لا توجد طلبات إيداع أو سحب معلّقة.';
+  items.forEach((r) => {
+    const card = document.createElement('article'); card.className = 'offer-item';
+    const h = document.createElement('h4'); h.textContent = `${r.type === 'deposit' ? 'إيداع' : 'سحب'} ${r.amount} ${r.asset} — ${r.userEmail} — ${r.reference || r.address}`; card.append(h);
+    [['موافقة', 'approve'], ['رفض', 'reject']].forEach(([label, decision]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost-btn small'; b.textContent = label;
+      b.addEventListener('click', async () => { const note = prompt(decision === 'approve' && r.type === 'withdrawal' ? 'رقم عملية التحويل (txid)' : 'ملاحظة (اختياري)') || ''; try { await request(`/api/admin/requests/${r.id}/decide`, { method: 'POST', body: JSON.stringify({ decision, note }) }); } catch (e) { setAccountStatus(e.message); } loadAdminRequests(); });
+      card.append(b);
+    });
+    box.append(card);
+  });
+}
 
 async function loadTrades() {
   const el = document.getElementById('myTrades'); if (!el) return;
@@ -264,7 +297,7 @@ authForm.addEventListener('submit', async (event) => {
     sessionStorage.setItem('dhamana_token', authToken);
     sessionStorage.setItem('dhamana_email', accountEmail);
     setAccountStatus(`تم ${mode === 'register' ? 'إنشاء الحساب' : 'تسجيل الدخول'}: ${accountEmail}`);
-    await loadMyOffers(); await loadTrades(); await loadWallet();
+    await loadMyOffers(); await loadTrades(); await loadWallet(); await loadRequests();
   } catch (error) {
     setAccountStatus(error.message || 'تعذر التسجيل.');
   }
@@ -310,7 +343,7 @@ document.getElementById('logoutWeb').addEventListener('click', async () => {
   sessionStorage.removeItem('dhamana_email');
   setAccountStatus('تم تسجيل الخروج.');
   myOffersEl.textContent = 'سجّل الدخول لعرض عروضك.';
-  loadTrades(); loadWallet();
+  loadTrades(); loadWallet(); loadRequests();
 });
 
 document.getElementById('connect').addEventListener('click', () => {
@@ -338,6 +371,7 @@ async function restoreSession() {
   await loadMyOffers();
   await loadTrades();
   await loadWallet();
+  await loadRequests();
 }
 
 loadOffers();

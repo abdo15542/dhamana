@@ -324,6 +324,62 @@ app.get('/api/admin/trades', requireAuth, requireAdmin, tx((req, res, store) => 
   return false;
 }));
 
+// ---------- Deposits & withdrawals (manual, admin-reviewed) ----------
+const ASSET_RE = /^[A-Z0-9]{2,10}$/;
+function parseMoney(body) {
+  const asset = String(body?.asset || '').trim().toUpperCase(); const amount = Number(body?.amount);
+  if (!ASSET_RE.test(asset) || !Number.isFinite(amount) || amount <= 0 || amount > 1e9) throw fail(400, 'Valid asset and positive amount are required.');
+  return { asset, amount: r8(amount) };
+}
+function newRequest(store, req, type, extra) {
+  store.requests ||= [];
+  if (store.requests.filter((r) => r.userId === req.user.id && r.status === 'pending').length >= 10) throw fail(429, 'Too many pending requests.');
+  const item = { id: crypto.randomUUID(), userId: req.user.id, userEmail: req.user.email, type, status: 'pending', createdAt: new Date().toISOString(), ...extra };
+  store.requests.push(item); return item;
+}
+const cleanText = (v, min, label) => { const x = String(v || '').trim().slice(0, 200); if (x.length < min) throw fail(400, `${label} is required.`); return x; };
+
+app.post('/api/wallet/deposits', requireAuth, tx((req, res, store) => {
+  const { asset, amount } = parseMoney(req.body);
+  const item = newRequest(store, req, 'deposit', { asset, amount, reference: cleanText(req.body?.reference, 5, 'Transfer reference/hash') });
+  res.status(201).json({ item });
+}));
+
+app.post('/api/wallet/withdrawals', requireAuth, tx((req, res, store) => {
+  const { asset, amount } = parseMoney(req.body);
+  const address = cleanText(req.body?.address, 5, 'Destination address');
+  const item = newRequest(store, req, 'withdrawal', { asset, amount, address });
+  move(store, req.user.id, asset, -amount, 'withdrawal_lock', item.id); // funds leave the balance immediately
+  res.status(201).json({ item });
+}));
+
+app.get('/api/wallet/requests', requireAuth, tx((req, res, store) => {
+  const items = (store.requests || []).filter((r) => r.userId === req.user.id).sort(byNewest);
+  res.json({ items, total: items.length }); return false;
+}));
+
+app.get('/api/admin/requests', requireAuth, requireAdmin, tx((req, res, store) => {
+  const status = req.query.status ? String(req.query.status) : null;
+  const items = (store.requests || []).filter((r) => !status || r.status === status).sort(byNewest);
+  res.json({ items, total: items.length }); return false;
+}));
+
+app.post('/api/admin/requests/:id/decide', requireAuth, requireAdmin, tx((req, res, store) => {
+  const r = (store.requests || []).find((x) => x.id === req.params.id);
+  if (!r) throw fail(404, 'Request not found.');
+  if (r.status !== 'pending') throw fail(409, 'Request already decided.');
+  const approve = req.body?.decision === 'approve';
+  if (!approve && req.body?.decision !== 'reject') throw fail(400, "decision must be 'approve' or 'reject'.");
+  r.note = String(req.body?.note || '').slice(0, 300); r.decidedBy = req.user.id; r.decidedAt = new Date().toISOString();
+  if (r.type === 'deposit' && approve) {
+    if (store.requests.some((x) => x.type === 'deposit' && x.status === 'approved' && x.asset === r.asset && x.reference.toLowerCase() === r.reference.toLowerCase())) throw fail(409, 'This transfer reference was already credited.');
+    move(store, r.userId, r.asset, r.amount, 'deposit', r.id);
+  }
+  if (r.type === 'withdrawal' && !approve) move(store, r.userId, r.asset, r.amount, 'withdrawal_refund', r.id);
+  r.status = approve ? 'approved' : 'rejected';
+  res.json({ item: r });
+}));
+
 app.post('/api/admin/trades/:id/resolve', requireAuth, requireAdmin, tx((req, res, store) => {
   const t = store.trades.find((x) => x.id === req.params.id);
   if (!t) throw fail(404, 'Trade not found.');

@@ -276,6 +276,15 @@
 
           <div id="myOffers" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض عروضك.</div>
           <p id="wallet" class="account-status"></p>
+          <form id="depositForm" class="offer-form">
+            <input name="asset" value="USDT" required /><input name="amount" type="number" step="any" min="0" placeholder="مبلغ الإيداع" required />
+            <input name="reference" placeholder="رقم/هاش عملية التحويل" required /><button class="primary-btn" type="submit">طلب إيداع</button>
+          </form>
+          <form id="withdrawForm" class="offer-form">
+            <input name="asset" value="USDT" required /><input name="amount" type="number" step="any" min="0" placeholder="مبلغ السحب" required />
+            <input name="address" placeholder="عنوان/حساب الاستلام" required /><button class="primary-btn" type="submit">طلب سحب</button>
+          </form>
+          <div id="myRequests"></div>
           <h3>صفقاتي</h3>
           <div id="adminPanel" hidden>
             <h3>لوحة الإدارة والتحكيم</h3>
@@ -286,6 +295,8 @@
               <input name="amount" type="number" step="any" placeholder="المبلغ (سالب للخصم)" required />
               <button type="submit" class="primary-btn">تعديل الرصيد</button>
             </form>
+            <h4>طلبات الإيداع والسحب</h4>
+            <div id="adminRequests" class="offers-list compact"></div>
             <div id="adminDisputes" class="offers-list compact"></div>
           </div>
           <div id="myTrades" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض صفقاتك.</div>
