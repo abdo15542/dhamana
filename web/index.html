@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#06111D" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -336,5 +339,6 @@
       window.WATHIQ_API = location.port === '8000' ? 'http://localhost:4000' : '';
     </script>
     <script src="app.js"></script>
+    <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
   </body>
 </html>

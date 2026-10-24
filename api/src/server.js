@@ -346,7 +346,7 @@ app.get('/api/users/:id/reputation', (req, res) => {
 });
 
 // the API also serves the web app, so one URL/port is enough in production
-app.use(express.static(path.join(__dirname, '..', '..', 'web'), { maxAge: '5m' }));
+app.use(express.static(path.join(__dirname, '..', '..', 'web'), { maxAge: '5m', setHeaders: (res, file) => { if (file.endsWith('sw.js')) res.set('Cache-Control', 'no-cache'); } }));
 
 app.use((req, res) => res.status(404).json({ error: 'Route not found.' }));
 

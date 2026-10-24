@@ -73,3 +73,9 @@ test('API serves the web app and security headers', async () => {
   assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(res.headers.get('x-powered-by'), null);
 });
+test('PWA assets: manifest valid, service worker not cached', async () => {
+  const m = await (await fetch(base + '/manifest.webmanifest')).json();
+  assert.equal(m.display, 'standalone'); assert.ok(m.icons.some((i) => i.sizes === '512x512'));
+  assert.equal((await fetch(base + '/icon-512.png')).status, 200);
+  assert.equal((await fetch(base + '/sw.js')).headers.get('cache-control'), 'no-cache');
+});

@@ -40,7 +40,11 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
-## Flutter app
+## Mobile app (installable PWA)
+
+Open the deployed HTTPS URL in Chrome on Android -> menu -> *Install app*. It runs full-screen, uses the same API/accounts, and caches only the app shell (never API data). Requires HTTPS (localhost works for testing).
+
+## Flutter app (static scaffold, not connected to the API)
 
 ```bash
 cd mobile
