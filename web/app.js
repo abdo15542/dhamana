@@ -374,5 +374,14 @@ async function restoreSession() {
   await loadRequests();
 }
 
+async function loadConfig() {
+  try {
+    const c = await request('/api/config'); const el = document.getElementById('depositInfo'); if (!el) return;
+    const lines = Object.entries(c.deposit || {}).map(([a, info]) => `${a}: ${info}`);
+    const limit = c.maxTradeTotal ? ` • الحد الأقصى للصفقة: ${c.maxTradeTotal}` : '';
+    el.textContent = (lines.length ? `عنوان/حساب الإيداع — ${lines.join(' | ')}` : 'تواصل مع الإدارة للحصول على عنوان الإيداع.') + ` • عمولة الصفقة ${(c.feeRate * 100).toFixed(1)}%` + limit;
+  } catch (e) { /* ignore */ }
+}
+loadConfig();
 loadOffers();
 restoreSession();

@@ -5,6 +5,8 @@ services:
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD (12+ chars) in .env}
       FEE_RATE: ${FEE_RATE:-0.01}
+      DEPOSIT_INFO: ${DEPOSIT_INFO:-{}}
+      MAX_TRADE_TOTAL: ${MAX_TRADE_TOTAL:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
     volumes: [dhamana-data:/data]
     restart: unless-stopped

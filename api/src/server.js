@@ -70,6 +70,18 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, service: 'dhamana-api', timestamp: new Date().toISOString() });
 });
 
+// public, non-secret settings the UI needs; deposit instructions are set by the operator via env
+app.get('/api/config', (req, res) => {
+  let deposit = {};
+  try { deposit = JSON.parse(process.env.DEPOSIT_INFO || '{}'); } catch (e) { deposit = {}; }
+  res.json({
+    feeRate: Number(process.env.FEE_RATE ?? 0.01),
+    payWindowMinutes: Number(process.env.PAY_WINDOW_MS ?? 30 * 60 * 1000) / 60000,
+    maxTradeTotal: Number(process.env.MAX_TRADE_TOTAL) > 0 ? Number(process.env.MAX_TRADE_TOTAL) : null,
+    deposit
+  });
+});
+
 app.post('/api/auth/register', authLimiter, (req, res) => {
   const { email, displayName, password } = req.body || {};
   if (!email || !displayName || !password) {
@@ -278,6 +290,8 @@ app.post('/api/offers/:id/trades', requireAuth, tx((req, res, store) => {
   if (offer.userId === req.user.id) throw fail(400, 'You cannot trade with your own offer.');
   const qty = req.body?.quantity === undefined ? offer.quantity : Number(req.body.quantity);
   if (!Number.isFinite(qty) || qty <= 0 || qty > offer.quantity) throw fail(400, 'Invalid quantity.');
+  const maxTotal = Number(process.env.MAX_TRADE_TOTAL);
+  if (maxTotal > 0 && r8(qty * offer.price) > maxTotal) throw fail(400, `Trade value exceeds the platform limit (${maxTotal}).`);
   move(store, offer.userId, offer.asset, -qty, 'escrow_lock'); // seller funds locked here
   offer.quantity = r8(offer.quantity - qty); if (offer.quantity === 0) offer.status = 'sold';
   const trade = { id: crypto.randomUUID(), offerId: offer.id, sellerId: offer.userId, buyerId: req.user.id, asset: offer.asset,
