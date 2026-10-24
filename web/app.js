@@ -43,7 +43,7 @@ async function request(path, options = {}) {
   return data;
 }
 
-function renderOfferCard(item, { onClose } = {}) {
+function renderOfferCard(item, { onClose, onBuy } = {}) {
   const el = document.createElement('article');
   el.className = 'offer-item';
 
@@ -90,7 +90,56 @@ function renderOfferCard(item, { onClose } = {}) {
     btn.addEventListener('click', () => onClose(item));
     el.append(btn);
   }
+  if (onBuy && item.status === 'open') {
+    const buy = document.createElement('button');
+    buy.type = 'button'; buy.className = 'primary-btn'; buy.textContent = 'شراء بالضمان';
+    buy.addEventListener('click', () => onBuy(item));
+    el.append(buy);
+  }
   return el;
+}
+
+const tradeLabels = { awaiting_payment: 'بانتظار الدفع', paid: 'تم الدفع - بانتظار تأكيد البائع', completed: 'مكتملة', cancelled: 'ملغاة', expired: 'منتهية', disputed: 'نزاع - بانتظار التحكيم', refunded: 'مستردة للبائع' };
+let myId = '';
+async function tradeAction(id, action, body) {
+  try { await request(`/api/trades/${id}/${action}`, { method: 'POST', body: JSON.stringify(body || {}) }); } catch (e) { setAccountStatus(e.message); }
+  await loadTrades(); await loadWallet();
+}
+async function buyOffer(item) {
+  if (!authToken) return setAccountStatus('سجّل الدخول أولًا للشراء.');
+  const q = Number(prompt(`الكمية (المتاح ${item.quantity})`, item.quantity));
+  if (!q) return;
+  try { await request(`/api/offers/${encodeURIComponent(item.id)}/trades`, { method: 'POST', body: JSON.stringify({ quantity: q }) }); setAccountStatus('تم فتح الصفقة وقفل الأصول في الضمان.'); }
+  catch (e) { setAccountStatus(e.message); }
+  await loadOffers(); await loadTrades();
+}
+async function loadWallet() {
+  const el = document.getElementById('wallet'); if (!el) return;
+  if (!authToken) { el.textContent = ''; return; }
+  try { const d = await request('/api/wallet'); const e = Object.entries(d.balances); el.textContent = e.length ? 'الرصيد: ' + e.map(([a, v]) => `${v} ${a}`).join(' • ') : 'الرصيد: 0'; } catch (e) { el.textContent = ''; }
+}
+async function loadTrades() {
+  const el = document.getElementById('myTrades'); if (!el) return;
+  if (!authToken) { el.textContent = 'سجّل الدخول لعرض صفقاتك.'; return; }
+  try {
+    myId = (await request('/api/auth/me')).user.id;
+    const { items } = await request('/api/trades');
+    el.replaceChildren();
+    if (!items.length) el.textContent = 'لا توجد صفقات بعد.';
+    items.forEach((t) => {
+      const card = document.createElement('article'); card.className = 'offer-item';
+      const isBuyer = t.buyerId === myId;
+      const h = document.createElement('h4'); h.textContent = `${t.quantity} ${t.asset} × ${t.price} = ${t.total} (${isBuyer ? 'شراء' : 'بيع'})`;
+      const st = document.createElement('div'); st.className = 'offer-state'; st.textContent = tradeLabels[t.status] || t.status;
+      card.append(h, st);
+      const add = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost-btn small'; b.textContent = label; b.addEventListener('click', fn); card.append(b); };
+      if (isBuyer && t.status === 'awaiting_payment') { add('تم الدفع', () => tradeAction(t.id, 'paid', { note: prompt('مرجع/ملاحظة الدفع') || '' })); add('إلغاء', () => tradeAction(t.id, 'cancel')); }
+      if (!isBuyer && t.status === 'paid') add('تأكيد استلام الدفع', () => tradeAction(t.id, 'confirm'));
+      if (t.status === 'paid') add('فتح نزاع', () => { const r = prompt('سبب النزاع'); if (r) tradeAction(t.id, 'dispute', { reason: r }); });
+      if (t.status === 'completed' && !(t.ratings || {})[myId]) add('تقييم 5★', () => tradeAction(t.id, 'rate', { score: 5 }));
+      el.append(card);
+    });
+  } catch (e) { el.textContent = e.message; }
 }
 
 let allOffers = [];
@@ -100,7 +149,7 @@ function applyFilters() {
   const pay = document.getElementById('filterPayment')?.value || '';
   const items = allOffers.filter((o) => (!asset || o.asset === asset) && (!pay || o.paymentMethod === pay));
   offersEl.replaceChildren();
-  items.forEach((offer) => offersEl.appendChild(renderOfferCard(offer)));
+  items.forEach((offer) => offersEl.appendChild(renderOfferCard(offer, { onBuy: buyOffer })));
   if (!items.length) offersEl.textContent = 'لا توجد عروض مطابقة.';
   if (statusEl) statusEl.textContent = `عدد العروض المفتوحة: ${items.length}`;
 }
@@ -182,7 +231,7 @@ authForm.addEventListener('submit', async (event) => {
     sessionStorage.setItem('dhamana_token', authToken);
     sessionStorage.setItem('dhamana_email', accountEmail);
     setAccountStatus(`تم ${mode === 'register' ? 'إنشاء الحساب' : 'تسجيل الدخول'}: ${accountEmail}`);
-    await loadMyOffers();
+    await loadMyOffers(); await loadTrades(); await loadWallet();
   } catch (error) {
     setAccountStatus(error.message || 'تعذر التسجيل.');
   }
@@ -228,6 +277,7 @@ document.getElementById('logoutWeb').addEventListener('click', async () => {
   sessionStorage.removeItem('dhamana_email');
   setAccountStatus('تم تسجيل الخروج.');
   myOffersEl.textContent = 'سجّل الدخول لعرض عروضك.';
+  loadTrades(); loadWallet();
 });
 
 document.getElementById('connect').addEventListener('click', () => {
@@ -253,6 +303,8 @@ async function restoreSession() {
   }
 
   await loadMyOffers();
+  await loadTrades();
+  await loadWallet();
 }
 
 loadOffers();

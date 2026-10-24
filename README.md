@@ -53,6 +53,10 @@ Email: admin@dhamana.local
 Password: admin123456
 ```
 
+## Escrow flow (implemented)
+
+Seller offer -> buyer opens trade (seller funds locked) -> buyer marks paid -> seller confirms (release to buyer minus `FEE_RATE`, default 1%) | cancel/expiry (`PAY_WINDOW_MS`, default 30 min) refunds seller | dispute -> admin resolves via `POST /api/admin/trades/:id/resolve` (`release` or `refund`). Wallet balances and an append-only ledger live in the API store; admins credit deposits with `POST /api/admin/credit` because **no payment gateway or blockchain custody is integrated** — that part needs your payment provider/wallet infrastructure and legal review.
+
 ## Configuration (optional env vars)
 
 - `PORT` (default 4000), `CORS_ORIGIN` (comma-separated allowed origins), `ADMIN_PASSWORD` (initial admin password), `DHAMANA_DATA_DIR`

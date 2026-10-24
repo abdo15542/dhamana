@@ -195,6 +195,132 @@ app.get('/api/admin/overview', requireAuth, requireAdmin, (req, res) => {
   });
 });
 
+
+// ---------- Escrow: wallets, ledger, trades ----------
+const FEE_RATE = Number(process.env.FEE_RATE ?? 0.01);
+const PAY_WINDOW_MS = Number(process.env.PAY_WINDOW_MS ?? 30 * 60 * 1000);
+const r8 = (n) => Math.round(n * 1e8) / 1e8;
+
+function move(store, userId, asset, delta, reason, tradeId) {
+  store.balances ||= {}; store.ledger ||= [];
+  const key = `${userId}:${asset}`;
+  const next = r8((store.balances[key] || 0) + delta);
+  if (next < 0) { const e = new Error('Insufficient balance.'); e.status = 400; throw e; }
+  store.balances[key] = next;
+  store.ledger.push({ id: crypto.randomUUID(), userId, asset, delta, reason, tradeId, at: new Date().toISOString() });
+}
+function log(trade, event, by) { trade.history.push({ event, by, at: new Date().toISOString() }); }
+function restoreOffer(store, trade) {
+  const offer = store.offers.find((o) => o.id === trade.offerId);
+  if (offer) { offer.quantity = r8(offer.quantity + trade.quantity); if (offer.status === 'sold') offer.status = 'open'; }
+}
+function refund(store, trade, status, by) {
+  move(store, trade.sellerId, trade.asset, trade.quantity, 'escrow_refund', trade.id);
+  restoreOffer(store, trade); trade.status = status; log(trade, status, by);
+}
+function release(store, trade, by) {
+  move(store, trade.buyerId, trade.asset, r8(trade.quantity - trade.fee), 'escrow_release', trade.id);
+  if (trade.fee > 0) move(store, 'admin-001', trade.asset, trade.fee, 'fee', trade.id);
+  trade.status = 'completed'; log(trade, 'completed', by);
+}
+function expire(store) {
+  let changed = false;
+  for (const t of store.trades || []) {
+    if (t.status === 'awaiting_payment' && Date.now() - new Date(t.createdAt) > PAY_WINDOW_MS) { refund(store, t, 'expired', 'system'); changed = true; }
+  }
+  return changed;
+}
+// load store, expire stale trades, run fn(store); wraps errors into JSON responses
+function tx(handler) {
+  return (req, res) => {
+    try {
+      const store = readStore(); store.trades ||= [];
+      expire(store);
+      const out = handler(req, res, store);
+      if (out !== false) writeStore(store);
+    } catch (e) { res.status(e.status || 500).json({ error: e.status ? e.message : 'Internal server error.' }); }
+  };
+}
+const fail = (status, message) => Object.assign(new Error(message), { status });
+const findTrade = (store, req) => {
+  const t = store.trades.find((x) => x.id === req.params.id);
+  if (!t) throw fail(404, 'Trade not found.');
+  if (![t.buyerId, t.sellerId].includes(req.user.id) && req.user.role !== 'admin') throw fail(403, 'Not your trade.');
+  return t;
+};
+
+app.get('/api/wallet', requireAuth, tx((req, res, store) => {
+  const prefix = `${req.user.id}:`;
+  const balances = Object.fromEntries(Object.entries(store.balances || {}).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k.slice(prefix.length), v]));
+  res.json({ balances, ledger: (store.ledger || []).filter((l) => l.userId === req.user.id).slice(-50).reverse() });
+}));
+
+// No payment rail is integrated: deposits are credited by an admin after verifying funds off-platform.
+app.post('/api/admin/credit', requireAuth, requireAdmin, tx((req, res, store) => {
+  const { email, asset, amount } = req.body || {};
+  const user = store.users.find((u) => u.email === String(email || '').trim().toLowerCase());
+  const a = String(asset || '').toUpperCase(); const n = Number(amount);
+  if (!user || !/^[A-Z0-9]{2,10}$/.test(a) || !Number.isFinite(n) || n === 0) throw fail(400, 'email, asset and a non-zero amount are required.');
+  move(store, user.id, a, n, 'admin_adjustment');
+  res.json({ ok: true });
+}));
+
+app.post('/api/offers/:id/trades', requireAuth, tx((req, res, store) => {
+  const offer = store.offers.find((o) => String(o.id) === req.params.id);
+  if (!offer || offer.status !== 'open') throw fail(404, 'Offer not available.');
+  if (offer.userId === req.user.id) throw fail(400, 'You cannot trade with your own offer.');
+  const qty = req.body?.quantity === undefined ? offer.quantity : Number(req.body.quantity);
+  if (!Number.isFinite(qty) || qty <= 0 || qty > offer.quantity) throw fail(400, 'Invalid quantity.');
+  move(store, offer.userId, offer.asset, -qty, 'escrow_lock'); // seller funds locked here
+  offer.quantity = r8(offer.quantity - qty); if (offer.quantity === 0) offer.status = 'sold';
+  const trade = { id: crypto.randomUUID(), offerId: offer.id, sellerId: offer.userId, buyerId: req.user.id, asset: offer.asset,
+    quantity: qty, price: offer.price, total: r8(qty * offer.price), fee: r8(qty * FEE_RATE), paymentMethod: offer.paymentMethod,
+    status: 'awaiting_payment', createdAt: new Date().toISOString(), history: [], ratings: {} };
+  log(trade, 'opened', req.user.id); store.trades.push(trade);
+  res.status(201).json({ item: trade });
+}));
+
+app.get('/api/trades', requireAuth, tx((req, res, store) => {
+  const items = store.trades.filter((t) => t.buyerId === req.user.id || t.sellerId === req.user.id).sort(byNewest);
+  res.json({ items, total: items.length });
+}));
+app.get('/api/trades/:id', requireAuth, tx((req, res, store) => { res.json({ item: findTrade(store, req) }); return false; }));
+
+const step = (path, check, apply) => app.post(`/api/trades/:id/${path}`, requireAuth, tx((req, res, store) => {
+  const t = findTrade(store, req); check(t, req); apply(store, t, req); res.json({ item: t });
+}));
+step('paid', (t, r) => { if (t.buyerId !== r.user.id) throw fail(403, 'Only the buyer can mark payment.'); if (t.status !== 'awaiting_payment') throw fail(409, 'Trade is not awaiting payment.'); },
+  (s, t, r) => { t.status = 'paid'; t.paymentNote = String(r.body?.note || '').slice(0, 500); log(t, 'paid', r.user.id); });
+step('confirm', (t, r) => { if (t.sellerId !== r.user.id) throw fail(403, 'Only the seller can confirm receipt.'); if (t.status !== 'paid') throw fail(409, 'Payment has not been marked yet.'); },
+  (s, t, r) => release(s, t, r.user.id));
+step('cancel', (t, r) => { if (t.buyerId !== r.user.id) throw fail(403, 'Only the buyer can cancel.'); if (t.status !== 'awaiting_payment') throw fail(409, 'Trade can no longer be cancelled.'); },
+  (s, t, r) => refund(s, t, 'cancelled', r.user.id));
+step('dispute', (t, r) => { if (t.status !== 'paid') throw fail(409, 'Only paid trades can be disputed.'); if (r.user.role === 'admin') throw fail(403, 'Admins resolve disputes.'); if (!String(r.body?.reason || '').trim()) throw fail(400, 'A reason is required.'); },
+  (s, t, r) => { t.status = 'disputed'; t.disputeReason = String(r.body.reason).slice(0, 1000); t.disputedBy = r.user.id; log(t, 'disputed', r.user.id); });
+step('rate', (t, r) => { if (t.status !== 'completed') throw fail(409, 'Only completed trades can be rated.'); const n = Number(r.body?.score); if (!Number.isInteger(n) || n < 1 || n > 5) throw fail(400, 'Score must be 1-5.'); if (t.ratings[r.user.id]) throw fail(409, 'Already rated.'); },
+  (s, t, r) => { t.ratings[r.user.id] = Number(r.body.score); });
+
+app.post('/api/admin/trades/:id/resolve', requireAuth, requireAdmin, tx((req, res, store) => {
+  const t = store.trades.find((x) => x.id === req.params.id);
+  if (!t) throw fail(404, 'Trade not found.');
+  if (t.status !== 'disputed') throw fail(409, 'Trade is not disputed.');
+  if (req.body?.outcome === 'release') release(store, t, req.user.id);
+  else if (req.body?.outcome === 'refund') refund(store, t, 'refunded', req.user.id);
+  else throw fail(400, "outcome must be 'release' or 'refund'.");
+  res.json({ item: t });
+}));
+
+app.get('/api/users/:id/reputation', (req, res) => {
+  const store = readStore(); let sum = 0; let n = 0; let done = 0;
+  for (const t of store.trades || []) {
+    if (t.sellerId !== req.params.id && t.buyerId !== req.params.id) continue;
+    if (t.status === 'completed') done += 1;
+    const other = t.sellerId === req.params.id ? t.buyerId : t.sellerId;
+    if (t.ratings?.[other]) { sum += t.ratings[other]; n += 1; }
+  }
+  res.json({ completedTrades: done, ratings: n, average: n ? Math.round((sum / n) * 10) / 10 : null });
+});
+
 app.use((req, res) => res.status(404).json({ error: 'Route not found.' }));
 
 // malformed JSON etc. -> clean JSON error instead of an HTML stack trace
