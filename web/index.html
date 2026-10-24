@@ -274,6 +274,17 @@
           <div id="myOffers" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض عروضك.</div>
           <p id="wallet" class="account-status"></p>
           <h3>صفقاتي</h3>
+          <div id="adminPanel" hidden>
+            <h3>لوحة الإدارة والتحكيم</h3>
+            <p id="adminStats" class="account-status"></p>
+            <form id="creditForm" class="offer-form">
+              <input name="email" type="email" placeholder="بريد المستخدم" required />
+              <input name="asset" type="text" value="USDT" required />
+              <input name="amount" type="number" step="any" placeholder="المبلغ (سالب للخصم)" required />
+              <button type="submit" class="primary-btn">تعديل الرصيد</button>
+            </form>
+            <div id="adminDisputes" class="offers-list compact"></div>
+          </div>
           <div id="myTrades" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض صفقاتك.</div>
         </div>
       </section>

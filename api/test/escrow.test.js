@@ -65,3 +65,18 @@ test('ledger always balances: total of all wallets equals credited funds', async
   const locked = JSON.parse(fs.readFileSync(path.join(process.env.DHAMANA_DATA_DIR, 'store.json'))).trades.filter((t) => ['awaiting_payment', 'paid', 'disputed'].includes(t.status)).reduce((a, t) => a + t.quantity, 0);
   assert.equal(Math.round((sum + locked) * 1e6) / 1e6, 300);
 });
+
+test('trade chat: parties and admin only; admin can list disputed trades', async () => {
+  const tr = await newTrade(10);
+  assert.equal((await call('POST', `/api/trades/${tr.id}/messages`, { text: 'hi' }, other)).status, 403);
+  assert.equal((await call('POST', `/api/trades/${tr.id}/messages`, { text: '  ' }, buyer)).status, 400);
+  assert.equal((await call('POST', `/api/trades/${tr.id}/messages`, { text: 'مرحبا' }, buyer)).status, 201);
+  const m = await call('POST', `/api/trades/${tr.id}/messages`, { text: 'reply' }, seller);
+  assert.equal(m.data.item.messages.length, 2);
+  await call('POST', `/api/trades/${tr.id}/paid`, {}, buyer);
+  await call('POST', `/api/trades/${tr.id}/dispute`, { reason: 'x' }, seller);
+  assert.equal((await call('GET', '/api/admin/trades?status=disputed', null, buyer)).status, 403);
+  const list = await call('GET', '/api/admin/trades?status=disputed', null, admin);
+  assert.ok(list.data.items.some((x) => x.id === tr.id));
+  assert.equal((await call('POST', `/api/trades/${tr.id}/messages`, { text: 'قرار التحكيم قريبًا' }, admin)).status, 201);
+});

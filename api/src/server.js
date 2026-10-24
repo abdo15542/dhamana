@@ -300,6 +300,23 @@ step('dispute', (t, r) => { if (t.status !== 'paid') throw fail(409, 'Only paid 
 step('rate', (t, r) => { if (t.status !== 'completed') throw fail(409, 'Only completed trades can be rated.'); const n = Number(r.body?.score); if (!Number.isInteger(n) || n < 1 || n > 5) throw fail(400, 'Score must be 1-5.'); if (t.ratings[r.user.id]) throw fail(409, 'Already rated.'); },
   (s, t, r) => { t.ratings[r.user.id] = Number(r.body.score); });
 
+app.post('/api/trades/:id/messages', requireAuth, tx((req, res, store) => {
+  const t = findTrade(store, req);
+  const text = String(req.body?.text || '').trim();
+  if (!text || text.length > 1000) throw fail(400, 'Message must be 1-1000 characters.');
+  t.messages ||= [];
+  if (t.messages.length >= 200) throw fail(429, 'Message limit reached for this trade.');
+  t.messages.push({ id: crypto.randomUUID(), by: req.user.id, byName: req.user.displayName, admin: req.user.role === 'admin', text, at: new Date().toISOString() });
+  res.status(201).json({ item: t });
+}));
+
+app.get('/api/admin/trades', requireAuth, requireAdmin, tx((req, res, store) => {
+  const status = req.query.status ? String(req.query.status) : null;
+  const items = store.trades.filter((t) => !status || t.status === status).sort(byNewest);
+  res.json({ items, total: items.length });
+  return false;
+}));
+
 app.post('/api/admin/trades/:id/resolve', requireAuth, requireAdmin, tx((req, res, store) => {
   const t = store.trades.find((x) => x.id === req.params.id);
   if (!t) throw fail(404, 'Trade not found.');

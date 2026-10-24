@@ -118,11 +118,42 @@ async function loadWallet() {
   if (!authToken) { el.textContent = ''; return; }
   try { const d = await request('/api/wallet'); const e = Object.entries(d.balances); el.textContent = e.length ? 'الرصيد: ' + e.map(([a, v]) => `${v} ${a}`).join(' • ') : 'الرصيد: 0'; } catch (e) { el.textContent = ''; }
 }
+async function loadAdmin(isAdmin) {
+  const el = document.getElementById('adminPanel'); if (!el) return;
+  el.hidden = !isAdmin; if (!isAdmin) return;
+  const box = document.getElementById('adminDisputes'); box.replaceChildren();
+  try {
+    const o = await request('/api/admin/overview');
+    document.getElementById('adminStats').textContent = `المستخدمون: ${o.totalUsers} • العروض: ${o.totalOffers} (مفتوحة ${o.openOffers})`;
+    const { items } = await request('/api/admin/trades?status=disputed');
+    if (!items.length) box.textContent = 'لا توجد نزاعات معلّقة.';
+    items.forEach((t) => {
+      const card = document.createElement('article'); card.className = 'offer-item';
+      const h = document.createElement('h4'); h.textContent = `${t.quantity} ${t.asset} (${t.total}) — ${t.disputeReason || ''}`;
+      card.append(h);
+      (t.messages || []).slice(-5).forEach((m) => { const p = document.createElement('p'); p.className = 'offer-meta'; p.textContent = `${m.byName}: ${m.text}`; card.append(p); });
+      [['تحرير للمشتري', 'release'], ['استرداد للبائع', 'refund']].forEach(([label, outcome]) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost-btn small'; b.textContent = label;
+        b.addEventListener('click', async () => { try { await request(`/api/admin/trades/${t.id}/resolve`, { method: 'POST', body: JSON.stringify({ outcome }) }); } catch (e) { setAccountStatus(e.message); } loadTrades(); });
+        card.append(b);
+      });
+      const msg = document.createElement('button'); msg.type = 'button'; msg.className = 'ghost-btn small'; msg.textContent = 'رسالة للطرفين';
+      msg.addEventListener('click', () => { const x = prompt('رسالة التحكيم'); if (x) request(`/api/trades/${t.id}/messages`, { method: 'POST', body: JSON.stringify({ text: x }) }).then(loadTrades).catch((e) => setAccountStatus(e.message)); });
+      card.append(msg); box.append(card);
+    });
+  } catch (e) { box.textContent = e.message; }
+}
+document.getElementById('creditForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const f = new FormData(event.target);
+  try { await request('/api/admin/credit', { method: 'POST', body: JSON.stringify({ email: f.get('email'), asset: f.get('asset'), amount: Number(f.get('amount')) }) }); setAccountStatus('تم تعديل الرصيد.'); event.target.reset(); await loadWallet(); }
+  catch (e) { setAccountStatus(e.message); }
+});
+
 async function loadTrades() {
   const el = document.getElementById('myTrades'); if (!el) return;
-  if (!authToken) { el.textContent = 'سجّل الدخول لعرض صفقاتك.'; return; }
+  if (!authToken) { el.textContent = 'سجّل الدخول لعرض صفقاتك.'; loadAdmin(false); return; }
   try {
-    myId = (await request('/api/auth/me')).user.id;
+    const me = (await request('/api/auth/me')).user; myId = me.id; loadAdmin(me.role === 'admin');
     const { items } = await request('/api/trades');
     el.replaceChildren();
     if (!items.length) el.textContent = 'لا توجد صفقات بعد.';
@@ -132,10 +163,12 @@ async function loadTrades() {
       const h = document.createElement('h4'); h.textContent = `${t.quantity} ${t.asset} × ${t.price} = ${t.total} (${isBuyer ? 'شراء' : 'بيع'})`;
       const st = document.createElement('div'); st.className = 'offer-state'; st.textContent = tradeLabels[t.status] || t.status;
       card.append(h, st);
+      (t.messages || []).slice(-5).forEach((m) => { const p = document.createElement('p'); p.className = 'offer-meta'; p.textContent = `${m.admin ? '[تحكيم] ' : ''}${m.byName}: ${m.text}`; card.append(p); });
       const add = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost-btn small'; b.textContent = label; b.addEventListener('click', fn); card.append(b); };
       if (isBuyer && t.status === 'awaiting_payment') { add('تم الدفع', () => tradeAction(t.id, 'paid', { note: prompt('مرجع/ملاحظة الدفع') || '' })); add('إلغاء', () => tradeAction(t.id, 'cancel')); }
       if (!isBuyer && t.status === 'paid') add('تأكيد استلام الدفع', () => tradeAction(t.id, 'confirm'));
       if (t.status === 'paid') add('فتح نزاع', () => { const r = prompt('سبب النزاع'); if (r) tradeAction(t.id, 'dispute', { reason: r }); });
+      add('رسالة', () => { const x = prompt('اكتب رسالتك'); if (x) tradeAction(t.id, 'messages', { text: x }); });
       if (t.status === 'completed' && !(t.ratings || {})[myId]) add('تقييم 5★', () => tradeAction(t.id, 'rate', { score: 5 }));
       el.append(card);
     });
