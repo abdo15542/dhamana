@@ -401,3 +401,9 @@ async function loadConfig() {
 loadConfig();
 loadOffers();
 restoreSession();
+
+document.getElementById('passwordForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault(); const f = new FormData(event.target);
+  try { await request('/api/auth/password', { method: 'POST', body: JSON.stringify({ currentPassword: f.get('currentPassword'), newPassword: f.get('newPassword') }) }); setAccountStatus('تم تغيير كلمة المرور، وتم تسجيل الخروج من الأجهزة الأخرى.'); event.target.reset(); }
+  catch (e) { setAccountStatus(e.message); }
+});

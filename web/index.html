@@ -275,6 +275,12 @@
           </div>
 
           <div id="myOffers" class="offers-list compact" aria-live="polite">سجّل الدخول لعرض عروضك.</div>
+          <details><summary>تغيير كلمة المرور</summary>
+            <form id="passwordForm" class="offer-form">
+              <input name="currentPassword" type="password" placeholder="كلمة المرور الحالية" autocomplete="current-password" required />
+              <input name="newPassword" type="password" minlength="10" placeholder="الجديدة (10 أحرف على الأقل)" autocomplete="new-password" required />
+              <button class="primary-btn" type="submit">تغيير</button>
+            </form></details>
           <div id="notifs"></div>
           <p id="wallet" class="account-status"></p>
           <p id="depositInfo" class="account-status"></p>

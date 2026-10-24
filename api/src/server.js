@@ -134,6 +134,19 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   res.json({ token, user: sanitizeUser(user) });
 });
 
+app.post('/api/auth/password', authLimiter, requireAuth, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password are required.' });
+  if (String(newPassword).length < 10 || String(newPassword).length > 200) return res.status(400).json({ error: 'New password must be 10-200 characters.' });
+  const store = readStore();
+  const user = store.users.find((u) => u.id === req.user.id);
+  if (!user || !verifyPassword(currentPassword, user.passwordHash)) return res.status(401).json({ error: 'Current password is incorrect.' });
+  user.passwordHash = hashPassword(newPassword);
+  store.sessions = store.sessions.filter((x) => x.userId !== user.id || x.token === req.token); // sign out every other device
+  writeStore(store);
+  res.json({ ok: true });
+});
+
 app.post('/api/auth/logout', requireAuth, (req, res) => {
   const store = readStore();
   store.sessions = store.sessions.filter((s) => s.token !== req.token);

@@ -9,6 +9,8 @@ Dhamana is a real escrow marketplace MVP designed for secure peer-to-peer digita
 - `mobile/`: Flutter app skeleton for Android APK generation
 - `docs/overview.md`: product overview and business model
 
+Full production guide (HTTPS, backups, security): see `docs/DEPLOY.md`.
+
 ## Deploy (one command)
 
 ```bash

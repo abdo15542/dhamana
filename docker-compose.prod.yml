@@ -1,0 +1,23 @@
+# Production: app + automatic HTTPS (Caddy gets/renews the certificate itself).
+# Run:  docker compose -f docker-compose.prod.yml up -d --build
+services:
+  dhamana:
+    build: .
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD (12+ chars) in .env}
+      FEE_RATE: ${FEE_RATE:-0.01}
+      DEPOSIT_INFO: ${DEPOSIT_INFO:-{}}
+      MAX_TRADE_TOTAL: ${MAX_TRADE_TOTAL:-}
+    volumes: [dhamana-data:/data]
+    restart: unless-stopped
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN (e.g. dhamana.example.com) in .env}
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data"]
+    depends_on: [dhamana]
+    restart: unless-stopped
+volumes:
+  dhamana-data:
+  caddy-data:
