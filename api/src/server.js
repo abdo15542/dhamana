@@ -228,6 +228,14 @@ function move(store, userId, asset, delta, reason, tradeId) {
   store.balances[key] = next;
   store.ledger.push({ id: crypto.randomUUID(), userId, asset, delta, reason, tradeId, at: new Date().toISOString() });
 }
+function notify(store, userId, text, refId) {
+  if (!userId || userId === 'system') return;
+  store.notifications ||= [];
+  store.notifications.push({ id: crypto.randomUUID(), userId, text, refId, read: false, at: new Date().toISOString() });
+  if (store.notifications.length > 5000) store.notifications.splice(0, store.notifications.length - 5000);
+}
+const STATUS_AR = { completed: 'اكتملت', cancelled: 'أُلغيت', expired: 'انتهت مهلتها', refunded: 'أُعيدت أصولها للبائع' };
+function notifyBoth(store, t) { [t.buyerId, t.sellerId].forEach((u) => notify(store, u, `الصفقة ${t.quantity} ${t.asset} ${STATUS_AR[t.status] || t.status}.`, t.id)); }
 function audit(store, req, action, details) {
   store.audit ||= [];
   store.audit.push({ id: crypto.randomUUID(), at: new Date().toISOString(), adminId: req.user.id, adminEmail: req.user.email, action, details });
@@ -240,12 +248,12 @@ function restoreOffer(store, trade) {
 }
 function refund(store, trade, status, by) {
   move(store, trade.sellerId, trade.asset, trade.quantity, 'escrow_refund', trade.id);
-  restoreOffer(store, trade); trade.status = status; log(trade, status, by);
+  restoreOffer(store, trade); trade.status = status; log(trade, status, by); notifyBoth(store, trade);
 }
 function release(store, trade, by) {
   move(store, trade.buyerId, trade.asset, r8(trade.quantity - trade.fee), 'escrow_release', trade.id);
   if (trade.fee > 0) move(store, 'admin-001', trade.asset, trade.fee, 'fee', trade.id);
-  trade.status = 'completed'; log(trade, 'completed', by);
+  trade.status = 'completed'; log(trade, 'completed', by); notifyBoth(store, trade);
 }
 function expire(store) {
   let changed = false;
@@ -304,6 +312,7 @@ app.post('/api/offers/:id/trades', requireAuth, tx((req, res, store) => {
     quantity: qty, price: offer.price, total: r8(qty * offer.price), fee: r8(qty * FEE_RATE), paymentMethod: offer.paymentMethod,
     status: 'awaiting_payment', createdAt: new Date().toISOString(), history: [], ratings: {} };
   log(trade, 'opened', req.user.id); store.trades.push(trade);
+  notify(store, trade.sellerId, `صفقة جديدة على عرضك: ${qty} ${offer.asset} — الأصول مقفلة في الضمان.`, trade.id);
   res.status(201).json({ item: trade });
 }));
 
@@ -317,13 +326,13 @@ const step = (path, check, apply) => app.post(`/api/trades/:id/${path}`, require
   const t = findTrade(store, req); check(t, req); apply(store, t, req); res.json({ item: t });
 }));
 step('paid', (t, r) => { if (t.buyerId !== r.user.id) throw fail(403, 'Only the buyer can mark payment.'); if (t.status !== 'awaiting_payment') throw fail(409, 'Trade is not awaiting payment.'); },
-  (s, t, r) => { t.status = 'paid'; t.paymentNote = String(r.body?.note || '').slice(0, 500); log(t, 'paid', r.user.id); });
+  (s, t, r) => { t.status = 'paid'; t.paymentNote = String(r.body?.note || '').slice(0, 500); log(t, 'paid', r.user.id); notify(s, t.sellerId, `المشتري أكد الدفع للصفقة ${t.quantity} ${t.asset}. تحقق ثم أكّد الاستلام.`, t.id); });
 step('confirm', (t, r) => { if (t.sellerId !== r.user.id) throw fail(403, 'Only the seller can confirm receipt.'); if (t.status !== 'paid') throw fail(409, 'Payment has not been marked yet.'); },
   (s, t, r) => release(s, t, r.user.id));
 step('cancel', (t, r) => { if (t.buyerId !== r.user.id) throw fail(403, 'Only the buyer can cancel.'); if (t.status !== 'awaiting_payment') throw fail(409, 'Trade can no longer be cancelled.'); },
   (s, t, r) => refund(s, t, 'cancelled', r.user.id));
 step('dispute', (t, r) => { if (t.status !== 'paid') throw fail(409, 'Only paid trades can be disputed.'); if (r.user.role === 'admin') throw fail(403, 'Admins resolve disputes.'); if (!String(r.body?.reason || '').trim()) throw fail(400, 'A reason is required.'); },
-  (s, t, r) => { t.status = 'disputed'; t.disputeReason = String(r.body.reason).slice(0, 1000); t.disputedBy = r.user.id; log(t, 'disputed', r.user.id); });
+  (s, t, r) => { t.status = 'disputed'; t.disputeReason = String(r.body.reason).slice(0, 1000); t.disputedBy = r.user.id; log(t, 'disputed', r.user.id); notify(s, r.user.id === t.buyerId ? t.sellerId : t.buyerId, `تم فتح نزاع على الصفقة ${t.quantity} ${t.asset}.`, t.id); });
 step('rate', (t, r) => { if (t.status !== 'completed') throw fail(409, 'Only completed trades can be rated.'); const n = Number(r.body?.score); if (!Number.isInteger(n) || n < 1 || n > 5) throw fail(400, 'Score must be 1-5.'); if (t.ratings[r.user.id]) throw fail(409, 'Already rated.'); },
   (s, t, r) => { t.ratings[r.user.id] = Number(r.body.score); });
 
@@ -334,6 +343,7 @@ app.post('/api/trades/:id/messages', requireAuth, tx((req, res, store) => {
   t.messages ||= [];
   if (t.messages.length >= 200) throw fail(429, 'Message limit reached for this trade.');
   t.messages.push({ id: crypto.randomUUID(), by: req.user.id, byName: req.user.displayName, admin: req.user.role === 'admin', text, at: new Date().toISOString() });
+  [t.buyerId, t.sellerId].filter((u) => u !== req.user.id).forEach((u) => notify(store, u, `رسالة جديدة في صفقة ${t.quantity} ${t.asset}.`, t.id));
   res.status(201).json({ item: t });
 }));
 
@@ -397,8 +407,18 @@ app.post('/api/admin/requests/:id/decide', requireAuth, requireAdmin, tx((req, r
   }
   if (r.type === 'withdrawal' && !approve) move(store, r.userId, r.asset, r.amount, 'withdrawal_refund', r.id);
   r.status = approve ? 'approved' : 'rejected';
+  notify(store, r.userId, `طلب ${r.type === 'deposit' ? 'الإيداع' : 'السحب'} (${r.amount} ${r.asset}): ${approve ? 'تمت الموافقة' : 'تم الرفض'}.`, r.id);
   audit(store, req, `${r.type}_${r.status}`, { requestId: r.id, user: r.userEmail, asset: r.asset, amount: r.amount, note: r.note });
   res.json({ item: r });
+}));
+
+app.get('/api/notifications', requireAuth, tx((req, res, store) => {
+  const mine = (store.notifications || []).filter((n) => n.userId === req.user.id);
+  res.json({ items: mine.slice(-50).reverse(), unread: mine.filter((n) => !n.read).length }); return false;
+}));
+app.post('/api/notifications/read', requireAuth, tx((req, res, store) => {
+  (store.notifications || []).forEach((n) => { if (n.userId === req.user.id) n.read = true; });
+  res.json({ ok: true });
 }));
 
 app.get('/api/admin/audit', requireAuth, requireAdmin, tx((req, res, store) => {

@@ -166,6 +166,16 @@ async function loadRequests() {
     setAccountStatus(dep ? 'تم إرسال طلب الإيداع للمراجعة.' : 'تم إرسال طلب السحب وقفل المبلغ.'); event.target.reset(); await loadWallet(); await loadRequests();
   } catch (e) { setAccountStatus(e.message); }
 }));
+async function loadNotifs() {
+  const el = document.getElementById('notifs'); if (!el) return; el.replaceChildren(); if (!authToken) return;
+  try {
+    const { items, unread } = await request('/api/notifications');
+    const head = document.createElement('p'); head.className = 'account-status'; head.textContent = `🔔 الإشعارات (${unread} جديد)`; el.append(head);
+    items.slice(0, 5).forEach((n) => { const p = document.createElement('p'); p.className = 'offer-meta'; p.textContent = `${n.read ? '' : '● '}${n.text}`; el.append(p); });
+    if (unread) { const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost-btn small'; b.textContent = 'تحديد الكل كمقروء'; b.addEventListener('click', async () => { await request('/api/notifications/read', { method: 'POST' }); loadNotifs(); }); el.append(b); }
+  } catch (e) { /* ignore */ }
+}
+setInterval(() => { if (authToken) { loadNotifs(); loadTrades(); loadWallet(); } }, 20000);
 async function loadAudit() {
   const box = document.getElementById('adminAudit'); if (!box) return; box.replaceChildren();
   const { items } = await request('/api/admin/audit');
@@ -188,6 +198,7 @@ async function loadAdminRequests() {
 }
 
 async function loadTrades() {
+  loadNotifs();
   const el = document.getElementById('myTrades'); if (!el) return;
   if (!authToken) { el.textContent = 'سجّل الدخول لعرض صفقاتك.'; loadAdmin(false); return; }
   try {
