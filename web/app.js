@@ -43,7 +43,7 @@ async function request(path, options = {}) {
   return data;
 }
 
-function renderOfferCard(item) {
+function renderOfferCard(item, { onClose } = {}) {
   const el = document.createElement('article');
   el.className = 'offer-item';
 
@@ -61,29 +61,66 @@ function renderOfferCard(item) {
 
   const meta = document.createElement('div');
   meta.className = 'offer-meta';
-  meta.innerHTML = `
-    <span>${item.vendor || 'مستخدم موثوق'}</span>
-    <span>•</span>
-    <span>${item.quantity || 1}</span>
-    <span>•</span>
-    <span>${paymentLabels[item.paymentMethod] || item.paymentMethod || 'طريقة الدفع'}</span>
-  `;
+  const parts = [
+    item.vendor || 'مستخدم موثوق',
+    item.quantity || 1,
+    paymentLabels[item.paymentMethod] || item.paymentMethod || 'طريقة الدفع',
+  ];
+  parts.forEach((text, i) => {
+    if (i) {
+      const dot = document.createElement('span');
+      dot.textContent = '•';
+      meta.append(dot);
+    }
+    const span = document.createElement('span');
+    span.textContent = String(text);
+    meta.append(span);
+  });
 
   const state = document.createElement('div');
   state.className = 'offer-state';
   state.textContent = item.status === 'open' ? 'مفتوح' : item.status;
 
   el.append(top, meta, state);
+  if (onClose && item.status === 'open') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ghost-btn small';
+    btn.textContent = 'إغلاق العرض';
+    btn.addEventListener('click', () => onClose(item));
+    el.append(btn);
+  }
   return el;
+}
+
+let allOffers = [];
+
+function applyFilters() {
+  const asset = document.getElementById('filterAsset')?.value || '';
+  const pay = document.getElementById('filterPayment')?.value || '';
+  const items = allOffers.filter((o) => (!asset || o.asset === asset) && (!pay || o.paymentMethod === pay));
+  offersEl.replaceChildren();
+  items.forEach((offer) => offersEl.appendChild(renderOfferCard(offer)));
+  if (!items.length) offersEl.textContent = 'لا توجد عروض مطابقة.';
+  if (statusEl) statusEl.textContent = `عدد العروض المفتوحة: ${items.length}`;
+}
+
+async function closeOffer(item) {
+  try {
+    await request(`/api/offers/${encodeURIComponent(item.id)}/close`, { method: 'PATCH' });
+    setAccountStatus('تم إغلاق العرض.');
+    await loadOffers();
+    await loadMyOffers();
+  } catch (error) {
+    setAccountStatus(error.message || 'تعذر إغلاق العرض.');
+  }
 }
 
 async function loadOffers() {
   try {
     const data = await request('/api/offers');
-    offersEl.replaceChildren();
-    const items = data.items || [];
-    items.forEach((offer) => offersEl.appendChild(renderOfferCard(offer)));
-    if (statusEl) statusEl.textContent = `عدد العروض المفتوحة: ${data.total || items.length}`;
+    allOffers = data.items || [];
+    applyFilters();
   } catch (error) {
     if (statusEl) statusEl.textContent = 'تعذر الاتصال بالخادم. تأكد من تشغيل API على المنفذ 4000.';
     console.error(error);
@@ -101,7 +138,7 @@ async function loadMyOffers() {
     const data = await request('/api/my/offers');
     myOffersEl.replaceChildren();
     const items = data.items || [];
-    items.forEach((offer) => myOffersEl.appendChild(renderOfferCard(offer)));
+    items.forEach((offer) => myOffersEl.appendChild(renderOfferCard(offer, { onClose: closeOffer })));
     if (!items.length) myOffersEl.textContent = 'ليس لديك عروض حتى الآن.';
   } catch (error) {
     myOffersEl.textContent = error.message || 'تعذر تحميل عروضك.';
@@ -180,8 +217,11 @@ offerForm.addEventListener('submit', async (event) => {
   }
 });
 
+['filterAsset', 'filterPayment'].forEach((id) => document.getElementById(id)?.addEventListener('change', applyFilters));
+document.getElementById('refreshOffers')?.addEventListener('click', loadOffers);
 document.getElementById('refreshMyOffers').addEventListener('click', loadMyOffers);
-document.getElementById('logoutWeb').addEventListener('click', () => {
+document.getElementById('logoutWeb').addEventListener('click', async () => {
+  if (authToken) await request('/api/auth/logout', { method: 'POST' }).catch(() => {});
   authToken = '';
   accountEmail = '';
   sessionStorage.removeItem('dhamana_token');

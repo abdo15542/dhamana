@@ -53,6 +53,12 @@ Email: admin@dhamana.local
 Password: admin123456
 ```
 
+## Configuration (optional env vars)
+
+- `PORT` (default 4000), `CORS_ORIGIN` (comma-separated allowed origins), `ADMIN_PASSWORD` (initial admin password), `DHAMANA_DATA_DIR`
+- Run tests: `cd api && npm test`
+- `api/data/store.json` is created on first run and is git-ignored. **Change the admin password before any real use.**
+
 ## Notes
 
 This is a genuine MVP implementation, not an audited production financial system. It is intended for working prototype development, local testing, and APK-ready app scaffolding.

@@ -195,32 +195,29 @@
             <aside class="filter-panel">
               <div class="panel-head">
                 <h3>تصفية العروض</h3>
-                <button class="ghost-btn small" type="button">تحديث</button>
+                <button id="refreshOffers" class="ghost-btn small" type="button">تحديث</button>
               </div>
 
               <label>
                 <span>العملة</span>
-                <select>
-                  <option>USDT</option>
-                  <option>BNB</option>
-                  <option>BTC</option>
-                  <option>ETH</option>
+                <select id="filterAsset">
+                  <option value="">كل العملات</option>
+                  <option value="USDT">USDT</option>
+                  <option value="BNB">BNB</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
                 </select>
               </label>
 
               <label>
                 <span>طريقة الدفع</span>
-                <select>
-                  <option>كل الطرق</option>
-                  <option>تحويل بنكي</option>
-                  <option>محفظة إلكترونية</option>
-                  <option>بطاقة هدايا</option>
+                <select id="filterPayment">
+                  <option value="">كل الطرق</option>
+                  <option value="bank_transfer">تحويل بنكي</option>
+                  <option value="wallet">محفظة إلكترونية</option>
+                  <option value="gift_card">بطاقة هدايا</option>
+                  <option value="digital_service">خدمة رقمية</option>
                 </select>
-              </label>
-
-              <label>
-                <span>النطاق السعري</span>
-                <input type="range" min="0" max="100" value="60" />
               </label>
             </aside>
 
