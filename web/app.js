@@ -123,7 +123,7 @@ async function loadAdmin(isAdmin) {
   el.hidden = !isAdmin; if (!isAdmin) return;
   const box = document.getElementById('adminDisputes'); box.replaceChildren();
   try {
-    await loadAdminRequests();
+    await loadAdminRequests(); await loadAudit();
     const o = await request('/api/admin/overview');
     document.getElementById('adminStats').textContent = `المستخدمون: ${o.totalUsers} • العروض: ${o.totalOffers} (مفتوحة ${o.openOffers})`;
     const { items } = await request('/api/admin/trades?status=disputed');
@@ -166,6 +166,11 @@ async function loadRequests() {
     setAccountStatus(dep ? 'تم إرسال طلب الإيداع للمراجعة.' : 'تم إرسال طلب السحب وقفل المبلغ.'); event.target.reset(); await loadWallet(); await loadRequests();
   } catch (e) { setAccountStatus(e.message); }
 }));
+async function loadAudit() {
+  const box = document.getElementById('adminAudit'); if (!box) return; box.replaceChildren();
+  const { items } = await request('/api/admin/audit');
+  items.slice(0, 15).forEach((a) => { const p = document.createElement('p'); p.className = 'offer-meta'; p.textContent = `${new Date(a.at).toLocaleString('ar')} — ${a.action} — ${JSON.stringify(a.details)}`; box.append(p); });
+}
 async function loadAdminRequests() {
   const box = document.getElementById('adminRequests'); if (!box) return; box.replaceChildren();
   const { items } = await request('/api/admin/requests?status=pending');
@@ -175,7 +180,7 @@ async function loadAdminRequests() {
     const h = document.createElement('h4'); h.textContent = `${r.type === 'deposit' ? 'إيداع' : 'سحب'} ${r.amount} ${r.asset} — ${r.userEmail} — ${r.reference || r.address}`; card.append(h);
     [['موافقة', 'approve'], ['رفض', 'reject']].forEach(([label, decision]) => {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost-btn small'; b.textContent = label;
-      b.addEventListener('click', async () => { const note = prompt(decision === 'approve' && r.type === 'withdrawal' ? 'رقم عملية التحويل (txid)' : 'ملاحظة (اختياري)') || ''; try { await request(`/api/admin/requests/${r.id}/decide`, { method: 'POST', body: JSON.stringify({ decision, note }) }); } catch (e) { setAccountStatus(e.message); } loadAdminRequests(); });
+      b.addEventListener('click', async () => { const note = prompt(decision === 'approve' && r.type === 'withdrawal' ? 'رقم عملية التحويل (txid)' : 'ملاحظة (اختياري)') || ''; try { await request(`/api/admin/requests/${r.id}/decide`, { method: 'POST', body: JSON.stringify({ decision, note }) }); } catch (e) { setAccountStatus(e.message); } loadAdminRequests(); loadAudit(); });
       card.append(b);
     });
     box.append(card);

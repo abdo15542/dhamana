@@ -228,6 +228,11 @@ function move(store, userId, asset, delta, reason, tradeId) {
   store.balances[key] = next;
   store.ledger.push({ id: crypto.randomUUID(), userId, asset, delta, reason, tradeId, at: new Date().toISOString() });
 }
+function audit(store, req, action, details) {
+  store.audit ||= [];
+  store.audit.push({ id: crypto.randomUUID(), at: new Date().toISOString(), adminId: req.user.id, adminEmail: req.user.email, action, details });
+  if (store.audit.length > 5000) store.audit.splice(0, store.audit.length - 5000);
+}
 function log(trade, event, by) { trade.history.push({ event, by, at: new Date().toISOString() }); }
 function restoreOffer(store, trade) {
   const offer = store.offers.find((o) => o.id === trade.offerId);
@@ -281,6 +286,7 @@ app.post('/api/admin/credit', requireAuth, requireAdmin, tx((req, res, store) =>
   const a = String(asset || '').toUpperCase(); const n = Number(amount);
   if (!user || !/^[A-Z0-9]{2,10}$/.test(a) || !Number.isFinite(n) || n === 0) throw fail(400, 'email, asset and a non-zero amount are required.');
   move(store, user.id, a, n, 'admin_adjustment');
+  audit(store, req, 'balance_adjustment', { email: user.email, asset: a, amount: n });
   res.json({ ok: true });
 }));
 
@@ -391,7 +397,13 @@ app.post('/api/admin/requests/:id/decide', requireAuth, requireAdmin, tx((req, r
   }
   if (r.type === 'withdrawal' && !approve) move(store, r.userId, r.asset, r.amount, 'withdrawal_refund', r.id);
   r.status = approve ? 'approved' : 'rejected';
+  audit(store, req, `${r.type}_${r.status}`, { requestId: r.id, user: r.userEmail, asset: r.asset, amount: r.amount, note: r.note });
   res.json({ item: r });
+}));
+
+app.get('/api/admin/audit', requireAuth, requireAdmin, tx((req, res, store) => {
+  const items = (store.audit || []).slice(-100).reverse();
+  res.json({ items, total: (store.audit || []).length }); return false;
 }));
 
 app.post('/api/admin/trades/:id/resolve', requireAuth, requireAdmin, tx((req, res, store) => {
@@ -401,6 +413,7 @@ app.post('/api/admin/trades/:id/resolve', requireAuth, requireAdmin, tx((req, re
   if (req.body?.outcome === 'release') release(store, t, req.user.id);
   else if (req.body?.outcome === 'refund') refund(store, t, 'refunded', req.user.id);
   else throw fail(400, "outcome must be 'release' or 'refund'.");
+  audit(store, req, `dispute_${req.body.outcome}`, { tradeId: t.id, asset: t.asset, quantity: t.quantity });
   res.json({ item: t });
 }));
 
